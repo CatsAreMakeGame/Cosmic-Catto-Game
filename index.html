@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cosmic Catto ☄️</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0; padding: 0; display: flex; justify-content: center; align-items: center;
+            height: 100vh; background-color: #0d1117; color: #fff;
+            font-family: 'Press Start 2P', cursive; overflow: hidden; text-align: center;
+        }
+        .game-container {
+            position: relative; width: 100%; max-width: 500px; height: 100%; max-height: 800px;
+            box-shadow: 0 0 20px rgba(173, 216, 230, 0.5); border: 2px solid lightblue;
+            border-radius: 15px; overflow: hidden; display: flex; justify-content: center;
+            align-items: center; background-color: #000010;
+        }
+        canvas { display: block; background-color: #000010; border-radius: 13px; max-width: 100%; max-height: 100%; object-fit: contain; }
+        .ui { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; pointer-events: none; }
+        .top-bar { position: absolute; top: 15px; left: 15px; right: 15px; display: flex; justify-content: space-between; align-items: center; pointer-events: all; }
+        .auth-controls button { font-size: 0.8rem; padding: 8px 12px; }
+        .game-hud { position: absolute; top: 60px; left: 20px; right: 20px; display: flex; justify-content: space-between; align-items: center; font-size: 1.2rem; text-shadow: 2px 2px 4px #000; }
+        .modal { background: rgba(0, 0, 20, 0.9); padding: 20px; border-radius: 15px; border: 2px solid lightblue; text-align: center; pointer-events: all; max-width: 95%; max-height: 90vh; overflow-y: auto; }
+        .modal h1 { margin-top: 0; font-size: 2rem; color: #ffcc00; }
+        .modal button { font-family: 'Press Start 2P', cursive; font-size: 1rem; padding: 12px 24px; border: 2px solid #ffcc00; background: transparent; color: #ffcc00; border-radius: 10px; cursor: pointer; transition: all 0.2s ease; margin-top: 10px; margin-left: 5px; margin-right: 5px; }
+        .modal button:hover:not(:disabled) { background: #ffcc00; color: #000010; }
+        .modal button:disabled { border-color: #888; color: #888; cursor: not-allowed; background: transparent; }
+        #store-grid { display: grid; grid-template-columns: 1fr; gap: 15px; margin-top: 20px; }
+        .skin-item { background: rgba(255, 255, 255, 0.1); padding: 15px; border-radius: 10px; border: 1px solid lightblue; display: flex; flex-direction: column; align-items: center; }
+        .skin-item .emoji { font-size: 3rem; }
+        .skin-item h3 { margin: 5px 0; color: #ffcc00; }
+        .skin-item p { font-size: 0.8rem; line-height: 1.4; margin: 5px 0 10px 0; flex-grow: 1; }
+        .auth-form { display: flex; flex-direction: column; gap: 15px; margin-top: 20px; }
+        .auth-form input { font-family: 'Press Start 2P', cursive; padding: 10px; border-radius: 5px; border: 1px solid lightblue; background: #0d1117; color: #fff; text-align: center; }
+        .auth-form p { font-size: 0.8rem; margin-top: 5px; }
+        .auth-form a { color: #ffcc00; text-decoration: underline; cursor: pointer; }
+        #auth-error { color: #ff4d4d; font-size: 0.8rem; min-height: 1.2rem; }
+        #abilityButton { position: absolute; bottom: 20px; right: 20px; font-size: 2.5rem; padding: 10px; border-radius: 50%; border: 2px solid #ffcc00; background: rgba(0, 0, 20, 0.8); cursor: pointer; pointer-events: all; }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div class="top-bar">
+            <div id="accountStatus">Guest</div>
+            <div class="auth-controls">
+                <button id="authButton">Sign In / Up</button>
+                <button id="logoutButton" style="display: none;">Log Out</button>
+            </div>
+        </div>
+        <div id="gameUI" class="ui" style="display: none;">
+             <div class="game-hud">
+                <div id="score">Score: 0</div>
+                <div id="coinsDisplay">💰 0</div>
+            </div>
+            <button id="abilityButton" style="display: none;">✨</button>
+        </div>
+        <div id="menuUI" class="ui">
+             <div id="startScreen" class="modal">
+                <h1>Cosmic Catto</h1>
+                <p>Dodge asteroids and unlock new cats!</p>
+                <p id="guestMessage" style="font-size: 0.8rem; color: #aaa; display: none;">As a guest, your progress is saved on this device only.</p>
+                <div id="main-menu-coins">Loading...</div>
+                <div>
+                    <button id="startButton" disabled>Start Game</button>
+                    <button id="storeButton" disabled>Store</button>
+                </div>
+            </div>
+            <div id="authScreen" class="modal" style="display: none;">
+                <h1 id="authTitle">Sign In</h1>
+                <form id="authForm" class="auth-form">
+                    <input type="text" id="username" placeholder="Username" required>
+                    <input type="email" id="email" placeholder="Email" required style="display: none;">
+                    <input type="password" id="password" placeholder="Password" required>
+                    <button type="submit" id="authSubmitButton">Sign In</button>
+                    <div id="auth-error"></div>
+                    <p id="authSwitchText">Don't have an account? <a id="authSwitchLink">Sign Up</a></p>
+                </form>
+                 <button id="closeAuthButton">Back</button>
+            </div>
+            <div id="storeScreen" class="modal" style="display: none;">
+                <h1>Cat Store</h1>
+                <div id="store-coins">💰 0</div>
+                <div id="store-grid"></div>
+                <button id="closeStoreButton">Back</button>
+            </div>
+             <div id="gameOverScreen" class="modal" style="display: none;">
+                <h1>Game Over</h1>
+                <p>Final Score: <span id="finalScore">0</span></p>
+                <button id="restartButton">Play Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, writeBatch } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        const firebaseConfig = {
+            apiKey: "AIzaSyD_7K83WOYu4xeBkepo6ZVsUsDfJpWeCY8",
+            authDomain: "cosmic-catto-game.firebaseapp.com",
+            projectId: "cosmic-catto-game",
+            storageBucket: "cosmic-catto-game.firebasestorage.app",
+            messagingSenderId: "21155413872",
+            appId: "1:21155413872:web:104a80ada95b8db9f759b5"
+        };
+
+        // --- DOM Elements ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameContainer = document.querySelector('.game-container');
+        const gameUI = document.getElementById('gameUI');
+        const menuUI = document.getElementById('menuUI');
+        const scoreEl = document.getElementById('score');
+        const coinsDisplay = document.getElementById('coinsDisplay');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+        const finalScoreEl = document.getElementById('finalScore');
+        const storeButton = document.getElementById('storeButton');
+        const storeScreen = document.getElementById('storeScreen');
+        const closeStoreButton = document.getElementById('closeStoreButton');
+        const storeGrid = document.getElementById('store-grid');
+        const storeCoinsEl = document.getElementById('store-coins');
+        const mainMenuCoinsEl = document.getElementById('main-menu-coins');
+        const abilityButton = document.getElementById('abilityButton');
+        const authButton = document.getElementById('authButton');
+        const logoutButton = document.getElementById('logoutButton');
+        const authScreen = document.getElementById('authScreen');
+        const authForm = document.getElementById('authForm');
+        const authTitle = document.getElementById('authTitle');
+        const authSubmitButton = document.getElementById('authSubmitButton');
+        const authSwitchText = document.getElementById('authSwitchText');
+        const authSwitchLink = document.getElementById('authSwitchText').querySelector('a');
+        const authError = document.getElementById('auth-error');
+        const accountStatus = document.getElementById('accountStatus');
+        const guestMessage = document.getElementById('guestMessage');
+        const closeAuthButton = document.getElementById('closeAuthButton');
+        const usernameInput = document.getElementById('username');
+        const emailInput = document.getElementById('email');
+
+
+        // --- Firebase Globals ---
+        let db, auth, userId, isAnonymous, username;
+
+        // --- Game State & Settings ---
+        let score = 0;
+        let coins = 0;
+        let gameSpeed = 2;
+        let obstacles = [];
+        let stars = [];
+        let animationFrameId;
+        let isGameOver = true;
+        let lastCoinScore = 0;
+        
+        // --- Player & Skins ---
+        const player = {
+            x: 0, y: 0, radius: 25, currentSkinId: 'default',
+            shieldActive: false, abilityUsed: false,
+        };
+
+        const skins = {
+            'default': { name: 'Default Catto', emoji: '😼', price: 0, unlocked: true, description: 'The OG space explorer.' },
+            'robot': { name: 'Robot Catto', emoji: '🤖', price: 25, unlocked: false, description: 'Ability: Smaller hitbox.' },
+            'alien': { name: 'Alien Catto', emoji: '👽', price: 75, unlocked: false, description: 'Ability: Zaps nearby asteroids.' },
+            'asteroid': { name: 'Asteroid Catto', emoji: '☄️', price: 150, unlocked: false, description: 'Ability: One-time shield.' },
+            'galaxy': { name: 'Galaxy Catto', emoji: '🌌', price: 300, unlocked: false, description: 'Ability: Slows time.' }
+        };
+
+        // --- Main Init Function ---
+        async function main() {
+            if (!firebaseConfig.apiKey) {
+                mainMenuCoinsEl.textContent = "Config missing in index.html";
+                return;
+            }
+            try {
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                
+                onAuthStateChanged(auth, handleAuthStateChange);
+                if (!auth.currentUser) {
+                    await signInAnonymously(auth);
+                }
+
+            } catch (error) {
+                console.error("Firebase initialization failed:", error);
+                mainMenuCoinsEl.textContent = "Error connecting.";
+            }
+        }
+        
+        async function handleAuthStateChange(user) {
+            if (user) {
+                userId = user.uid;
+                isAnonymous = user.isAnonymous;
+                
+                if (isAnonymous) {
+                    username = "Guest";
+                    guestMessage.style.display = 'block';
+                    authButton.style.display = 'block';
+                    logoutButton.style.display = 'none';
+                    loadLocalData();
+                } else {
+                    await loadFirebaseData();
+                    guestMessage.style.display = 'none';
+                    authButton.style.display = 'none';
+                    logoutButton.style.display = 'block';
+                }
+                
+                accountStatus.textContent = username;
+                startButton.disabled = false;
+                storeButton.disabled = false;
+                updateCoinDisplays();
+                setupUI();
+            }
+        }
+
+        // --- Data Persistence ---
+        function getFirebaseDocRef(collection, id) {
+            return doc(db, collection, id);
+        }
+
+        function loadLocalData() {
+            const localData = JSON.parse(localStorage.getItem('cosmicCattoGuestData')) || { coins: 0, currentSkinId: 'default', unlockedSkins: ['default'] };
+            coins = localData.coins;
+            player.currentSkinId = localData.currentSkinId;
+            Object.keys(skins).forEach(id => skins[id].unlocked = false); // Reset
+            skins.default.unlocked = true;
+            if (localData.unlockedSkins) {
+                localData.unlockedSkins.forEach(id => {
+                    if (skins[id]) skins[id].unlocked = true;
+                });
+            }
+            updateCoinDisplays();
+        }
+
+        function saveLocalData() {
+            const unlockedSkins = Object.keys(skins).filter(id => skins[id].unlocked);
+            const data = { coins, currentSkinId: player.currentSkinId, unlockedSkins };
+            localStorage.setItem('cosmicCattoGuestData', JSON.stringify(data));
+        }
+
+        async function loadFirebaseData() {
+            const docRef = getFirebaseDocRef('playerData', userId);
+            if (!docRef) return;
+            try {
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    coins = data.coins || 0;
+                    username = data.username || "Player";
+                    player.currentSkinId = data.currentSkinId || 'default';
+                    Object.keys(skins).forEach(id => skins[id].unlocked = false);
+                    skins.default.unlocked = true;
+                    if (data.unlockedSkins) {
+                        data.unlockedSkins.forEach(id => {
+                            if (skins[id]) skins[id].unlocked = true;
+                        });
+                    }
+                }
+            } catch (error) { console.error("Error loading Firebase data:", error); }
+        }
+
+        async function saveFirebaseData() {
+            const docRef = getFirebaseDocRef('playerData', userId);
+            if (!docRef || isAnonymous) return;
+            const unlockedSkins = Object.keys(skins).filter(id => skins[id].unlocked);
+            const dataToSave = { coins, username, currentSkinId: player.currentSkinId, unlockedSkins };
+            try {
+                await setDoc(docRef, dataToSave, { merge: true });
+            } catch (error) { console.error("Error saving Firebase data:", error); }
+        }
+
+        async function mergeLocalDataWithFirebase(newUser, newUsername) {
+            const localData = JSON.parse(localStorage.getItem('cosmicCattoGuestData'));
+            if (!localData) return;
+
+            const docRef = getFirebaseDocRef('playerData', newUser.uid);
+            const firebaseSnap = await getDoc(docRef);
+            const firebaseData = firebaseSnap.exists() ? firebaseSnap.data() : { coins: 0, unlockedSkins: ['default'] };
+            
+            const mergedCoins = (firebaseData.coins || 0) + (localData.coins || 0);
+            const mergedSkins = [...new Set([...(firebaseData.unlockedSkins || []), ...(localData.unlockedSkins || [])])];
+            
+            username = newUsername;
+            await setDoc(docRef, { coins: mergedCoins, unlockedSkins: mergedSkins, username: newUsername }, { merge: true });
+            localStorage.removeItem('cosmicCattoGuestData');
+        }
+
+        // --- Auth UI and Logic ---
+        let isSignUpMode = false;
+
+        function showAuthModal(show) {
+            startScreen.style.display = show ? 'none' : 'flex';
+            authScreen.style.display = show ? 'flex' : 'none';
+            authError.textContent = '';
+        }
+
+        function toggleAuthMode() {
+            isSignUpMode = !isSignUpMode;
+            authTitle.textContent = isSignUpMode ? 'Sign Up' : 'Sign In';
+            authSubmitButton.textContent = isSignUpMode ? 'Sign Up' : 'Sign In';
+            usernameInput.style.display = 'block'; // Always show username now
+            emailInput.style.display = isSignUpMode ? 'block' : 'none';
+            if (!isSignUpMode) {
+                usernameInput.placeholder = "Username";
+                emailInput.required = false;
+            } else {
+                usernameInput.placeholder = "Choose Username";
+                emailInput.required = true;
+            }
+            authSwitchText.innerHTML = isSignUpMode ? 'Already have an account? <a>Sign In</a>' : "Don't have an account? <a>Sign Up</a>";
+            authError.textContent = '';
+            authSwitchText.querySelector('a').addEventListener('click', toggleAuthMode);
+        }
+        
+        // Initialize the auth form for Sign In mode first
+        toggleAuthMode(); // Run once to set initial state
+        toggleAuthMode(); // Run again to flip back to Sign In
+
+        authForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const pass = document.getElementById('password').value;
+            const user = usernameInput.value;
+            authSubmitButton.disabled = true;
+            authError.textContent = '';
+
+            try {
+                if (isSignUpMode) {
+                    // --- Sign Up Flow ---
+                    const email = emailInput.value;
+                    if (user.length < 3) throw new Error("Username must be at least 3 characters.");
+
+                    const usernameDoc = await getDoc(getFirebaseDocRef('usernames', user.toLowerCase()));
+                    if (usernameDoc.exists()) throw new Error("Username is already taken.");
+
+                    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+                    
+                    const batch = writeBatch(db);
+                    batch.set(getFirebaseDocRef('usernames', user.toLowerCase()), { uid: userCredential.user.uid });
+                    batch.set(getFirebaseDocRef('playerData', userCredential.user.uid), { username: user, email: email, coins: 0, unlockedSkins: ['default'], currentSkinId: 'default' });
+                    await batch.commit();
+                    
+                    await mergeLocalDataWithFirebase(userCredential.user, user);
+
+                } else {
+                    // --- Sign In Flow ---
+                    const usernameDoc = await getDoc(getFirebaseDocRef('usernames', user.toLowerCase()));
+                    if (!usernameDoc.exists()) throw new Error("Username not found.");
+                    
+                    const uid = usernameDoc.data().uid;
+                    const userProfileDoc = await getDoc(getFirebaseDocRef('playerData', uid));
+                    if (!userProfileDoc.exists()) throw new Error("Could not find user profile.");
+
+                    const email = userProfileDoc.data().email;
+                    await signInWithEmailAndPassword(auth, email, pass);
+                }
+                
+                showAuthModal(false);
+
+            } catch (error) {
+                authError.textContent = error.message.replace('Firebase: ', '').replace('auth/', '').replace(/-/g, ' ');
+            } finally {
+                authSubmitButton.disabled = false;
+            }
+        });
+
+        logoutButton.addEventListener('click', async () => {
+            await saveFirebaseData();
+            await signOut(auth);
+            await signInAnonymously(auth);
+        });
+        
+        // --- Game Logic ---
+        function setupUI() {
+            resizeCanvas();
+            draw();
+            updateCoinDisplays();
+            if (!document.body.dataset.listenersReady) {
+                setupEventListeners();
+                document.body.dataset.listenersReady = "true";
+            }
+        }
+
+        function openStore() {
+            startScreen.style.display = 'none';
+            storeScreen.style.display = 'flex';
+            renderStore();
+        }
+
+        function closeStore() {
+            storeScreen.style.display = 'none';
+            startScreen.style.display = 'flex';
+        }
+
+        function renderStore() {
+            storeScreen.innerHTML = `
+                <h1>Cat Store</h1>
+                <div id="store-coins">💰 ${coins}</div>
+                <div id="store-grid"></div>
+                <button id="closeStoreButton">Back</button>
+            `;
+            const grid = storeScreen.querySelector('#store-grid');
+            Object.entries(skins).forEach(([id, skin]) => {
+                const item = document.createElement('div');
+                item.className = 'skin-item';
+                item.innerHTML = `<div class="emoji">${skin.emoji}</div><h3>${skin.name}</h3><p>${skin.description}</p>`;
+                const button = document.createElement('button');
+                button.dataset.id = id;
+                if (skin.unlocked) {
+                    button.textContent = player.currentSkinId === id ? 'Equipped' : 'Equip';
+                    button.disabled = player.currentSkinId === id;
+                    button.className = 'equip-btn';
+                } else {
+                    button.textContent = `Buy (💰${skin.price})`;
+                    button.disabled = coins < skin.price;
+                    button.className = 'buy-btn';
+                }
+                item.appendChild(button);
+                grid.appendChild(item);
+            });
+            storeScreen.querySelector('#closeStoreButton').addEventListener('click', closeStore);
+            grid.addEventListener('click', handleStoreClick);
+        }
+        
+        async function handleStoreClick(e) {
+            const target = e.target;
+            if (target.tagName !== 'BUTTON') return;
+            const id = target.dataset.id;
+            if (!id) return;
+            if (target.classList.contains('buy-btn')) {
+                const skin = skins[id];
+                if (coins >= skin.price && !skin.unlocked) {
+                    coins -= skin.price;
+                    skin.unlocked = true;
+                    player.currentSkinId = id;
+                    if(isAnonymous) saveLocalData(); else await saveFirebaseData();
+                    renderStore();
+                }
+            } else if (target.classList.contains('equip-btn')) {
+                player.currentSkinId = id;
+                if(isAnonymous) saveLocalData(); else await saveFirebaseData();
+                renderStore();
+            }
+        }
+
+        function resizeCanvas() {
+            canvas.width = gameContainer.clientWidth;
+            canvas.height = gameContainer.clientHeight;
+            player.y = canvas.height - 60;
+            if (isGameOver) player.x = canvas.width / 2;
+            stars = [];
+            for (let i = 0; i < 150; i++) {
+                stars.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, radius: Math.random() * 1.5, speed: Math.random() * 0.5 + 0.2 });
+            }
+        }
+
+        function startGame() {
+            isGameOver = false; score = 0; lastCoinScore = 0; gameSpeed = 2; obstacles = [];
+            const currentSkin = skins[player.currentSkinId];
+            player.radius = currentSkin.name === 'Robot Catto' ? 20 : 25;
+            player.shieldActive = currentSkin.name === 'Asteroid Catto';
+            player.abilityUsed = false;
+            abilityButton.style.display = currentSkin.name === 'Galaxy Catto' ? 'block' : 'none';
+            abilityButton.disabled = false;
+            menuUI.style.display = 'none';
+            gameUI.style.display = 'block';
+            player.x = canvas.width / 2;
+            gameLoop();
+        }
+
+        function endGame() {
+            isGameOver = true;
+            cancelAnimationFrame(animationFrameId);
+            gameOverScreen.style.display = 'flex';
+            finalScoreEl.textContent = score;
+            gameUI.style.display = 'none';
+            menuUI.style.display = 'flex';
+            if (isAnonymous) saveLocalData(); else saveFirebaseData();
+        }
+
+        function gameLoop() {
+            if (isGameOver) return;
+            update(); draw();
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        function update() {
+            stars.forEach(s => { s.y += s.speed * gameSpeed * 0.5; if (s.y > canvas.height) s.y = 0; });
+            if (animationFrameId % Math.floor(60 / gameSpeed) === 0) {
+                const size = Math.random() * 20 + 20;
+                const x = Math.random() * (canvas.width - size);
+                obstacles.push({ x, y: -size, size });
+            }
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                const o = obstacles[i];
+                o.y += gameSpeed;
+                const dist = Math.hypot(player.x - (o.x + o.size / 2), player.y - (o.y + o.size / 2));
+                if (dist < player.radius + o.size / 2) {
+                    if (player.shieldActive) {
+                        player.shieldActive = false; obstacles.splice(i, 1);
+                    } else { endGame(); return; }
+                }
+                if (o.y > canvas.height + o.size) obstacles.splice(i, 1);
+            }
+            score++;
+            if (score - lastCoinScore >= 100) { coins++; lastCoinScore += 100; }
+            if (score > 0 && score % 200 === 0) gameSpeed += 0.1;
+            if (skins[player.currentSkinId].name === 'Alien Catto' && animationFrameId % 180 === 0 && obstacles.length > 0) {
+                 obstacles.splice(Math.floor(Math.random() * obstacles.length), 1);
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            stars.forEach(s => { ctx.beginPath(); ctx.arc(s.x, s.y, s.radius, 0, Math.PI * 2); ctx.fill(); });
+            ctx.font = '40px sans-serif';
+            obstacles.forEach(o => ctx.fillText('☄️', o.x, o.y));
+            const skin = skins[player.currentSkinId];
+            ctx.font = `${player.radius * 2}px sans-serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(skin.emoji, player.x, player.y);
+            if (player.shieldActive) {
+                ctx.beginPath(); ctx.arc(player.x, player.y, player.radius + 5, 0, Math.PI * 2);
+                ctx.strokeStyle = 'rgba(173, 216, 230, 0.8)'; ctx.lineWidth = 3; ctx.stroke();
+            }
+            if (!isGameOver) {
+                scoreEl.textContent = `Score: ${score}`;
+                coinsDisplay.textContent = `💰 ${coins}`;
+            }
+        }
+        
+        function updateCoinDisplays() {
+            const coinText = `💰 ${coins}`;
+            mainMenuCoinsEl.textContent = coinText;
+            if(storeScreen.style.display === 'flex') {
+                storeScreen.querySelector('#store-coins').textContent = coinText;
+            }
+        }
+
+        function useGalaxyAbility() {
+            if (player.abilityUsed) return;
+            player.abilityUsed = true; abilityButton.disabled = true;
+            const originalSpeed = gameSpeed;
+            gameSpeed = originalSpeed * 0.5;
+            setTimeout(() => { gameSpeed = originalSpeed; }, 3000);
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('resize', () => { resizeCanvas(); if(isGameOver) draw(); });
+            function movePlayer(x) { if (isGameOver) return; player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, x)); }
+            gameContainer.addEventListener('mousemove', e => movePlayer(e.clientX - canvas.getBoundingClientRect().left));
+            gameContainer.addEventListener('touchmove', e => { e.preventDefault(); movePlayer(e.touches[0].clientX - canvas.getBoundingClientRect().left); }, { passive: false });
+            
+            startButton.addEventListener('click', startGame);
+            restartButton.addEventListener('click', () => {
+                gameOverScreen.style.display = 'none';
+                startScreen.style.display = 'flex';
+                updateCoinDisplays();
+            });
+            storeButton.addEventListener('click', openStore);
+            abilityButton.addEventListener('click', useGalaxyAbility);
+            authButton.addEventListener('click', () => showAuthModal(true));
+            closeAuthButton.addEventListener('click', () => showAuthModal(false));
+            authSwitchLink.addEventListener('click', toggleAuthMode);
+        }
+        
+        main();
+    </script>
+</body>
+</html>
