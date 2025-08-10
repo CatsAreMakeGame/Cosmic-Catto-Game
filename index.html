@@ -63,11 +63,11 @@
              <div id="startScreen" class="modal">
                 <h1>Cosmic Catto</h1>
                 <p>Dodge asteroids and unlock new cats!</p>
-                <p id="guestMessage" style="font-size: 0.8rem; color: #aaa; display: none;">As a guest, your progress is saved on this device only.</p>
-                <div id="main-menu-coins">Loading...</div>
+                <p id="guestMessage" style="font-size: 0.8rem; color: #aaa;">As a guest, your progress is saved on this device only.</p>
+                <div id="main-menu-coins"></div>
                 <div>
-                    <button id="startButton" disabled>Start Game</button>
-                    <button id="storeButton" disabled>Store</button>
+                    <button id="startButton">Start Game</button>
+                    <button id="storeButton">Store</button>
                 </div>
             </div>
             <div id="authScreen" class="modal" style="display: none;">
@@ -145,9 +145,9 @@
         const usernameInput = document.getElementById('username');
         const emailInput = document.getElementById('email');
 
-
         // --- Firebase Globals ---
         let db, auth, userId, isAnonymous, username;
+        let firebaseInitialized = false;
 
         // --- Game State & Settings ---
         let score = 0;
@@ -173,25 +173,23 @@
             'galaxy': { name: 'Galaxy Catto', emoji: '🌌', price: 300, unlocked: false, description: 'Ability: Slows time.' }
         };
 
-        // --- Main Init Function ---
-        async function main() {
-            if (!firebaseConfig.apiKey) {
-                mainMenuCoinsEl.textContent = "Config missing in index.html";
-                return;
-            }
+        // --- Firebase Initialization (called on demand) ---
+        async function initializeFirebase() {
+            if (firebaseInitialized) return true;
             try {
                 const app = initializeApp(firebaseConfig);
                 db = getFirestore(app);
                 auth = getAuth(app);
-                
                 onAuthStateChanged(auth, handleAuthStateChange);
                 if (!auth.currentUser) {
                     await signInAnonymously(auth);
                 }
-
+                firebaseInitialized = true;
+                return true;
             } catch (error) {
                 console.error("Firebase initialization failed:", error);
-                mainMenuCoinsEl.textContent = "Error connecting.";
+                authError.textContent = "Could not connect to server.";
+                return false;
             }
         }
         
@@ -214,10 +212,7 @@
                 }
                 
                 accountStatus.textContent = username;
-                startButton.disabled = false;
-                storeButton.disabled = false;
                 updateCoinDisplays();
-                setupUI();
             }
         }
 
@@ -230,7 +225,7 @@
             const localData = JSON.parse(localStorage.getItem('cosmicCattoGuestData')) || { coins: 0, currentSkinId: 'default', unlockedSkins: ['default'] };
             coins = localData.coins;
             player.currentSkinId = localData.currentSkinId;
-            Object.keys(skins).forEach(id => skins[id].unlocked = false); // Reset
+            Object.keys(skins).forEach(id => skins[id].unlocked = false);
             skins.default.unlocked = true;
             if (localData.unlockedSkins) {
                 localData.unlockedSkins.forEach(id => {
@@ -268,8 +263,9 @@
         }
 
         async function saveFirebaseData() {
+            if (!firebaseInitialized || isAnonymous) return;
             const docRef = getFirebaseDocRef('playerData', userId);
-            if (!docRef || isAnonymous) return;
+            if (!docRef) return;
             const unlockedSkins = Object.keys(skins).filter(id => skins[id].unlocked);
             const dataToSave = { coins, username, currentSkinId: player.currentSkinId, unlockedSkins };
             try {
@@ -296,7 +292,11 @@
         // --- Auth UI and Logic ---
         let isSignUpMode = false;
 
-        function showAuthModal(show) {
+        async function showAuthModal(show) {
+            if (show) {
+                const success = await initializeFirebase();
+                if (!success) return; // Don't show modal if Firebase fails
+            }
             startScreen.style.display = show ? 'none' : 'flex';
             authScreen.style.display = show ? 'flex' : 'none';
             authError.textContent = '';
@@ -306,23 +306,13 @@
             isSignUpMode = !isSignUpMode;
             authTitle.textContent = isSignUpMode ? 'Sign Up' : 'Sign In';
             authSubmitButton.textContent = isSignUpMode ? 'Sign Up' : 'Sign In';
-            usernameInput.style.display = 'block'; // Always show username now
             emailInput.style.display = isSignUpMode ? 'block' : 'none';
-            if (!isSignUpMode) {
-                usernameInput.placeholder = "Username";
-                emailInput.required = false;
-            } else {
-                usernameInput.placeholder = "Choose Username";
-                emailInput.required = true;
-            }
+            usernameInput.placeholder = isSignUpMode ? "Choose Username" : "Username";
+            emailInput.required = isSignUpMode;
             authSwitchText.innerHTML = isSignUpMode ? 'Already have an account? <a>Sign In</a>' : "Don't have an account? <a>Sign Up</a>";
             authError.textContent = '';
             authSwitchText.querySelector('a').addEventListener('click', toggleAuthMode);
         }
-        
-        // Initialize the auth form for Sign In mode first
-        toggleAuthMode(); // Run once to set initial state
-        toggleAuthMode(); // Run again to flip back to Sign In
 
         authForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -333,31 +323,29 @@
 
             try {
                 if (isSignUpMode) {
-                    // --- Sign Up Flow ---
                     const email = emailInput.value;
                     if (user.length < 3) throw new Error("Username must be at least 3 characters.");
-
                     const usernameDoc = await getDoc(getFirebaseDocRef('usernames', user.toLowerCase()));
                     if (usernameDoc.exists()) throw new Error("Username is already taken.");
-
-                    const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
+                    
+                    const tempAuth = getAuth(initializeApp(firebaseConfig, 'temp-signup'));
+                    const userCredential = await createUserWithEmailAndPassword(tempAuth, email, pass);
                     
                     const batch = writeBatch(db);
                     batch.set(getFirebaseDocRef('usernames', user.toLowerCase()), { uid: userCredential.user.uid });
                     batch.set(getFirebaseDocRef('playerData', userCredential.user.uid), { username: user, email: email, coins: 0, unlockedSkins: ['default'], currentSkinId: 'default' });
                     await batch.commit();
                     
-                    await mergeLocalDataWithFirebase(userCredential.user, user);
+                    await signOut(tempAuth);
+                    await signInWithEmailAndPassword(auth, email, pass);
+                    await mergeLocalDataWithFirebase(auth.currentUser, user);
 
                 } else {
-                    // --- Sign In Flow ---
                     const usernameDoc = await getDoc(getFirebaseDocRef('usernames', user.toLowerCase()));
                     if (!usernameDoc.exists()) throw new Error("Username not found.");
-                    
                     const uid = usernameDoc.data().uid;
                     const userProfileDoc = await getDoc(getFirebaseDocRef('playerData', uid));
                     if (!userProfileDoc.exists()) throw new Error("Could not find user profile.");
-
                     const email = userProfileDoc.data().email;
                     await signInWithEmailAndPassword(auth, email, pass);
                 }
@@ -374,7 +362,9 @@
         logoutButton.addEventListener('click', async () => {
             await saveFirebaseData();
             await signOut(auth);
-            await signInAnonymously(auth);
+            firebaseInitialized = false; // Reset for next login
+            handleAuthStateChange(null); // Manually trigger guest mode
+            loadLocalData(); // Reload local data for guest
         });
         
         // --- Game Logic ---
@@ -571,8 +561,17 @@
             closeAuthButton.addEventListener('click', () => showAuthModal(false));
             authSwitchLink.addEventListener('click', toggleAuthMode);
         }
-        
-        main();
+
+        // --- Initial Load ---
+        function initialLoad() {
+            loadLocalData();
+            setupUI();
+            toggleAuthMode(); // Set to sign up
+            toggleAuthMode(); // Flip back to sign in
+        }
+
+        initialLoad();
+
     </script>
 </body>
 </html>
